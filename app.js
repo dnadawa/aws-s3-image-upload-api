@@ -18,6 +18,9 @@ const storage = multer.memoryStorage({
 
 const upload = multer({storage}).single("image");
 
+app.get('/', (req, res) => {
+    res.send("<h1>Hello world!</h1>");
+});
 
 app.post('/upload', upload, (req, res) => {
     console.log("starting upload of " + req.file.originalname);
@@ -39,6 +42,6 @@ app.post('/upload', upload, (req, res) => {
 });
 
 
-app.listen(443, () => {
+app.listen(3000, () => {
     console.log("Server started!");
 });
