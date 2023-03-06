@@ -1,7 +1,9 @@
 const express = require('express');
 const multer = require('multer');
 const AWS = require('aws-sdk');
-require('dotenv').config()
+const mysql = require('mysql2');
+const databaseConfig = require("./database.config");
+require('dotenv').config();
 
 const app = express();
 
@@ -41,6 +43,33 @@ app.post('/upload', upload, (req, res) => {
     });
 });
 
+app.get('/fields', (req, res) => {
+    const connection = mysql.createConnection({
+        host: databaseConfig.host,
+        user: databaseConfig.user,
+        password: databaseConfig.password,
+        database: databaseConfig.database,
+        insecureAuth: true,
+        port: 3306,
+        connectTimeout: 30000,
+    });
+
+    connection.connect(function(err) {
+        if (!err) {
+            connection.query('SELECT * FROM lookup', (err1, result, fields) => {
+                if(err1){
+                    console.log(err1);
+                    res.status(400);
+                    return;
+                }
+
+                res.status(200).send(result);
+            });
+        } else {
+            console.log("mysql connection lost " + err);
+        }
+    });
+});
 
 app.listen(3000, () => {
     console.log("Server started!");
