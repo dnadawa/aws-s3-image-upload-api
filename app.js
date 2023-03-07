@@ -35,21 +35,21 @@ function createMySQLConnection() {
 }
 
 function generateAccessToken(user) {
-  return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '180s' });
+  return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "900s" });
 }
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization']
-  const token = authHeader && authHeader.split(' ')[1];
-  if (token == null) return res.status(401).send({error: "No authorization token found!"});
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (token == null)
+    return res.status(401).send({ error: "No authorization token found!" });
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-    if (err) return res.status(403).send({error : "Unauthorized!"});
+    if (err) return res.status(403).send({ error: "Unauthorized!" });
     req.user = user;
     next();
   });
 }
-
 
 app.get("/", (req, res) => {
   res.send("<h1>Hello world!</h1>");
@@ -65,10 +65,10 @@ app.post("/upload", upload, (req, res) => {
 
   s3.upload(params, (err, data) => {
     if (err) {
-      res.status(500).send(err);
+      return res.status(500).send(err);
     }
 
-    res.status(200).send({
+    return res.status(200).send({
       status: "Success",
     });
   });
@@ -81,7 +81,7 @@ app.post("/fields", authenticateToken, (req, res) => {
   connection.connect(function (err) {
     if (err) {
       console.log(err);
-      res.status(500).send({ error: err });
+      return res.status(500).send({ error: err });
     }
 
     const query = "SELECT FID FROM lookup WHERE user_id = ?";
@@ -90,17 +90,16 @@ app.post("/fields", authenticateToken, (req, res) => {
       if (err1) {
         console.log(err1);
         connection.end();
-        res.status(500).send({ error: err });
+        return res.status(500).send({ error: err });
       }
 
       if (result.length === 0) {
         connection.end();
-        res.status(404).send({ error: "No Data Found!" });
+        return res.status(404).send({ error: "No Data Found!" });
       } else {
         connection.end();
-        res.status(200).send({ result: result });
+        return res.status(200).send({ result: result });
       }
-
     });
   });
 });
@@ -113,21 +112,22 @@ app.post("/login", (req, res) => {
   connection.connect((err) => {
     if (err) {
       console.log(err);
-      res.status(500).send({ error: err });
+      return res.status(500).send({ error: err });
     }
 
-    const query = "SELECT email, password, user_id FROM lookup WHERE email = ? LIMIT 1";
+    const query =
+      "SELECT email, password, user_id FROM lookup WHERE email = ? LIMIT 1";
 
     connection.query(query, [username], (err1, result, fields) => {
       if (err1) {
         console.log(err1);
         connection.end();
-        res.status(500).send({ error: err });
+        return res.status(500).send({ error: err });
       }
 
       if (result.length === 0) {
         connection.end();
-        res.status(403).send({ error: "User not found!" });
+        return res.status(403).send({ error: "User not found!" });
       }
 
       const receivedPassword = crypto
@@ -135,16 +135,20 @@ app.post("/login", (req, res) => {
         .update(result[0].password)
         .digest("hex");
       if (receivedPassword === password) {
-        const user = {id: result[0].user_id};
+        const user = { id: result[0].user_id };
         const token = generateAccessToken(user);
         connection.end();
-        res.status(200).send({ userID : user.id, accessToken: token });
+        return res.status(200).send({ userID: user.id, accessToken: token });
       } else {
         connection.end();
-        res.status(403).send({ error: "Password is incorrect!" });
+        return res.status(403).send({ error: "Password is incorrect!" });
       }
     });
   });
+});
+
+app.get("/validateToken", authenticateToken, (req, res) => {
+  res.status(200).send({status: 'success'});
 });
 
 app.listen(3000, () => {
