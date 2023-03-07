@@ -5,6 +5,7 @@ const mysql = require("mysql2");
 const databaseConfig = require("./database.config");
 const bodyParse = require("body-parser");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const app = express();
@@ -33,6 +34,23 @@ function createMySQLConnection() {
   });
 }
 
+function generateAccessToken(user) {
+  return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '180s' });
+}
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token == null) return res.status(401).send({error: "No authorization token found!"});
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) return res.status(403).send({error : "Unauthorized!"});
+    req.user = user;
+    next();
+  });
+}
+
+
 app.get("/", (req, res) => {
   res.send("<h1>Hello world!</h1>");
 });
@@ -56,7 +74,7 @@ app.post("/upload", upload, (req, res) => {
   });
 });
 
-app.post("/fields", (req, res) => {
+app.post("/fields", authenticateToken, (req, res) => {
   const { userID } = req.body;
   const connection = createMySQLConnection();
 
@@ -117,8 +135,10 @@ app.post("/login", (req, res) => {
         .update(result[0].password)
         .digest("hex");
       if (receivedPassword === password) {
+        const user = {id: result[0].user_id};
+        const token = generateAccessToken(user);
         connection.end();
-        res.status(200).send({ status: "success", user_id : result[0].user_id });
+        res.status(200).send({ userID : user.id, accessToken: token });
       } else {
         connection.end();
         res.status(403).send({ error: "Password is incorrect!" });
