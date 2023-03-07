@@ -56,29 +56,39 @@ app.post("/upload", upload, (req, res) => {
   });
 });
 
-app.get("/fields", (req, res) => {
+app.post("/fields", (req, res) => {
+  const { userID } = req.body;
   const connection = createMySQLConnection();
 
   connection.connect(function (err) {
-    if (!err) {
-      connection.query("SELECT * FROM lookup", (err1, result, fields) => {
-        if (err1) {
-          console.log(err1);
-          res.status(400);
-          return;
-        }
-
-        res.status(200).send(result);
-      });
-    } else {
-      console.log("mysql connection lost " + err);
+    if (err) {
+      console.log(err);
+      res.status(500).send({ error: err });
     }
+
+    const query = "SELECT FID FROM lookup WHERE user_id = ?";
+
+    connection.query(query, [userID], (err1, result, fields) => {
+      if (err1) {
+        console.log(err1);
+        connection.end();
+        res.status(500).send({ error: err });
+      }
+
+      if (result.length === 0) {
+        connection.end();
+        res.status(404).send({ error: "No Data Found!" });
+      } else {
+        connection.end();
+        res.status(200).send({ result: result });
+      }
+
+    });
   });
 });
 
 app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
+  const { username, password } = req.body;
 
   const connection = createMySQLConnection();
 
@@ -88,7 +98,7 @@ app.post("/login", (req, res) => {
       res.status(500).send({ error: err });
     }
 
-    const query = "SELECT email, password FROM lookup WHERE email = ? LIMIT 1";
+    const query = "SELECT email, password, user_id FROM lookup WHERE email = ? LIMIT 1";
 
     connection.query(query, [username], (err1, result, fields) => {
       if (err1) {
@@ -102,10 +112,13 @@ app.post("/login", (req, res) => {
         res.status(403).send({ error: "User not found!" });
       }
 
-      const receivedPassword = crypto.createHash('sha256').update(result[0].password).digest('hex');
+      const receivedPassword = crypto
+        .createHash("sha256")
+        .update(result[0].password)
+        .digest("hex");
       if (receivedPassword === password) {
         connection.end();
-        res.status(200).send({ status: "success" });
+        res.status(200).send({ status: "success", user_id : result[0].user_id });
       } else {
         connection.end();
         res.status(403).send({ error: "Password is incorrect!" });
