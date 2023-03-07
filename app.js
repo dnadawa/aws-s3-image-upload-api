@@ -4,6 +4,7 @@ const AWS = require("aws-sdk");
 const mysql = require("mysql2");
 const databaseConfig = require("./database.config");
 const bodyParse = require("body-parser");
+const crypto = require("crypto");
 require("dotenv").config();
 
 const app = express();
@@ -56,6 +57,8 @@ app.post("/upload", upload, (req, res) => {
 });
 
 app.get("/fields", (req, res) => {
+  const connection = createMySQLConnection();
+
   connection.connect(function (err) {
     if (!err) {
       connection.query("SELECT * FROM lookup", (err1, result, fields) => {
@@ -99,7 +102,7 @@ app.post("/login", (req, res) => {
         res.status(403).send({ error: "User not found!" });
       }
 
-      const receivedPassword = result[0].password;
+      const receivedPassword = crypto.createHash('sha256').update(result[0].password).digest('hex');
       if (receivedPassword === password) {
         connection.end();
         res.status(200).send({ status: "success" });
