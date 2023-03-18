@@ -6,6 +6,8 @@ const databaseConfig = require("./database.config");
 const bodyParse = require("body-parser");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
+const sgMail = require("@sendgrid/mail");
+const otpGenerator = require("otp-generator");
 require("dotenv").config();
 
 const app = express();
@@ -16,11 +18,15 @@ const s3 = new AWS.S3({
   secretAccessKey: process.env.SECRET_KEY,
 });
 
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
 const storage = multer.memoryStorage({
   destination: function (req, file, callback) {
     callback(null, "");
   },
 });
+
+const OTPs = [];
 
 const upload = multer({ storage }).single("image");
 
@@ -84,7 +90,7 @@ app.post("/fields", authenticateToken, (req, res) => {
       return res.status(500).send({ error: err });
     }
 
-    const query = "SELECT FID FROM lookup WHERE user_id = ?";
+    const query = "SELECT FID, field_name FROM lookup WHERE user_id = ?";
 
     connection.query(query, [userID], (err1, result, fields) => {
       if (err1) {
@@ -147,8 +153,106 @@ app.post("/login", (req, res) => {
   });
 });
 
+app.post("/send-otp", (req, res) => {
+  const { email } = req.body;
+  const otp = otpGenerator.generate(6, {
+    digits: true,
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false,
+  });
+
+  const connection = createMySQLConnection();
+
+  connection.connect((err) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).send({ error: err });
+    }
+
+    const query = "SELECT email FROM lookup WHERE email = ? LIMIT 1";
+
+    connection.query(query, [email], (err1, result, fields) => {
+      if (err1) {
+        console.log(err1);
+        connection.end();
+        return res.status(500).send({ error: err });
+      }
+
+      if (result.length === 0) {
+        connection.end();
+        return res.status(403).send({ error: "User not found!" });
+      }
+
+      sgMail
+          .send({
+            to: "dulajnadawa@gmail.com", //todo: change email and add dynamic template id
+            from: 'noreply@em4162.spirocarbon.com',
+            subject: 'OTP for DigitalCrop',
+            text: 'Your otp for DigitalCrop is ' + otp,
+          })
+          .then(() => {
+            OTPs.push({
+              otp: otp,
+              user: email,
+              createdTime: new Date(Date.now()),
+              isUsed: false,
+            });
+            return res.status(200).send({status: 'success'});
+          }, error => {
+            if(error.response){
+              console.log(error.response.body);
+            }
+            return res.status(424).send({status: 'failed', error: "Email sending error!"});
+          });
+    });
+  });
+});
+
+app.post("/verify-otp", (req, res) => {
+  const {otp, email} = req.body;
+
+  if(OTPs.find(e => e.otp === otp && e.user === email && e.isUsed === false)){
+    const storedOTP = OTPs.find(e => e.otp === otp && e.user === email && e.isUsed === false);
+    const elapsedTimeInSeconds = Math.floor(Math.abs((storedOTP.createdTime.getTime() - (new Date().getTime())) / 1000));
+    if(elapsedTimeInSeconds <= 300){
+      return res.status(200).send({verify: true});
+    }
+    return res.status(200).send({verify: false});
+  } else {
+    return res.status(200).send({verify: false});
+  }
+});
+
+app.post("/change-password", (req, res) => {
+  const { email, password } = req.body;
+
+  const connection = createMySQLConnection();
+
+  connection.connect((err) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).send({ error: err });
+    }
+
+    const query =
+        "UPDATE lookup SET password = ? WHERE email = ?";
+
+    connection.query(query, [password, email], (err1, result, fields) => {
+      if (err1) {
+        console.log(err1);
+        connection.end();
+        return res.status(500).send({ error: err });
+      }
+
+      connection.end();
+      return res.status(200).send({status: "success"});
+    });
+  });
+});
+
 app.get("/validateToken", authenticateToken, (req, res) => {
-  res.status(200).send({status: 'success'});
+  res.status(200).send({ status: "success" });
 });
 
 app.listen(3000, () => {
