@@ -186,7 +186,7 @@ app.post("/send-otp", (req, res) => {
 
       sgMail
           .send({
-            to: "dulajnadawa@gmail.com", //todo: change email and add dynamic template id
+            to: email, //todo: change email and add dynamic template id
             from: 'noreply@em4162.spirocarbon.com',
             subject: 'OTP for DigitalCrop',
             text: 'Your otp for DigitalCrop is ' + otp,
