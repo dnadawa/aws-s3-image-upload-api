@@ -155,6 +155,7 @@ app.post("/login", (req, res) => {
 
 app.post("/send-otp", (req, res) => {
   const { email } = req.body;
+  console.log(email);
   const otp = otpGenerator.generate(6, {
     digits: true,
     lowerCaseAlphabets: false,
@@ -186,10 +187,13 @@ app.post("/send-otp", (req, res) => {
 
       sgMail
           .send({
-            to: email, //todo: change email and add dynamic template id
+            to: email,
             from: 'noreply@em4162.spirocarbon.com',
             subject: 'OTP for DigitalCrop',
-            text: 'Your otp for DigitalCrop is ' + otp,
+            templateId: "d-1c0cbb9c2f1f44ddaf354a24f8a41dce",
+            dynamicTemplateData: {
+              "otp": otp,
+            }
           })
           .then(() => {
             OTPs.push({
