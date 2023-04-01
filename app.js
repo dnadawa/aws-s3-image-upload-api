@@ -186,45 +186,56 @@ app.post("/send-otp", (req, res) => {
       }
 
       sgMail
-          .send({
-            to: email,
-            from: 'noreply@em4162.spirocarbon.com',
-            subject: 'OTP for DigitalCrop',
-            templateId: "d-1c0cbb9c2f1f44ddaf354a24f8a41dce",
-            dynamicTemplateData: {
-              "otp": otp,
-            }
-          })
-          .then(() => {
+        .send({
+          to: email,
+          from: "noreply@em4162.spirocarbon.com",
+          subject: "OTP for DigitalCrop",
+          templateId: "d-1c0cbb9c2f1f44ddaf354a24f8a41dce",
+          dynamicTemplateData: {
+            otp: otp,
+          },
+        })
+        .then(
+          () => {
             OTPs.push({
               otp: otp,
               user: email,
               createdTime: new Date(Date.now()),
               isUsed: false,
             });
-            return res.status(200).send({status: 'success'});
-          }, error => {
-            if(error.response){
+            return res.status(200).send({ status: "success" });
+          },
+          (error) => {
+            if (error.response) {
               console.log(error.response.body);
             }
-            return res.status(424).send({status: 'failed', error: "Email sending error!"});
-          });
+            return res
+              .status(424)
+              .send({ status: "failed", error: "Email sending error!" });
+          }
+        );
     });
   });
 });
 
 app.post("/verify-otp", (req, res) => {
-  const {otp, email} = req.body;
+  const { otp, email } = req.body;
 
-  if(OTPs.find(e => e.otp === otp && e.user === email && e.isUsed === false)){
-    const storedOTP = OTPs.find(e => e.otp === otp && e.user === email && e.isUsed === false);
-    const elapsedTimeInSeconds = Math.floor(Math.abs((storedOTP.createdTime.getTime() - (new Date().getTime())) / 1000));
-    if(elapsedTimeInSeconds <= 300){
-      return res.status(200).send({verify: true});
+  if (
+    OTPs.find((e) => e.otp === otp && e.user === email && e.isUsed === false)
+  ) {
+    const storedOTP = OTPs.find(
+      (e) => e.otp === otp && e.user === email && e.isUsed === false
+    );
+    const elapsedTimeInSeconds = Math.floor(
+      Math.abs((storedOTP.createdTime.getTime() - new Date().getTime()) / 1000)
+    );
+    if (elapsedTimeInSeconds <= 300) {
+      return res.status(200).send({ verify: true });
     }
-    return res.status(200).send({verify: false});
+    return res.status(200).send({ verify: false });
   } else {
-    return res.status(200).send({verify: false});
+    return res.status(200).send({ verify: false });
   }
 });
 
@@ -239,8 +250,7 @@ app.post("/change-password", (req, res) => {
       return res.status(500).send({ error: err });
     }
 
-    const query =
-        "UPDATE lookup SET password = ? WHERE email = ?";
+    const query = "UPDATE lookup SET password = ? WHERE email = ?";
 
     connection.query(query, [password, email], (err1, result, fields) => {
       if (err1) {
@@ -250,7 +260,63 @@ app.post("/change-password", (req, res) => {
       }
 
       connection.end();
-      return res.status(200).send({status: "success"});
+      return res.status(200).send({ status: "success" });
+    });
+  });
+});
+
+app.post("/add-activity", (req, res) => {
+  const { userID, activity, date, fieldName } = req.body;
+
+  const connection = createMySQLConnection();
+
+  connection.connect((err) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).send({ error: err });
+    }
+
+    const query =
+      "INSERT INTO farm_activity ('user_ID', 'field_name', 'activity', 'date') VALUES (?, ?, ?, ?)";
+
+    connection.query(
+      query,
+      [userID, fieldName, activity, date],
+      (err1, result, fields) => {
+        if (err1) {
+          console.log(err1);
+          connection.end();
+          return res.status(500).send({ error: err });
+        }
+
+        connection.end();
+        return res.status(200).send({ status: "Success" });
+      }
+    );
+  });
+});
+
+app.post("/activities", (req, res) => {
+  const { userID } = req.body;
+
+  const connection = createMySQLConnection();
+
+  connection.connect(function (err) {
+    if (err) {
+      console.log(err);
+      return res.status(500).send({ error: err });
+    }
+
+    const query = "SELECT * FROM farm_activity WHERE user_id = ?";
+
+    connection.query(query, [userID], (err1, result, fields) => {
+      if (err1) {
+        console.log(err1);
+        connection.end();
+        return res.status(500).send({ error: err });
+      }
+      connection.end();
+      return res.status(200).send({ result: result });
     });
   });
 });
