@@ -267,7 +267,6 @@ app.post("/change-password", (req, res) => {
 
 app.post("/add-activity", (req, res) => {
   const { userID, activity, date, fieldName } = req.body;
-
   const connection = createMySQLConnection();
 
   connection.connect((err) => {
@@ -276,8 +275,8 @@ app.post("/add-activity", (req, res) => {
       return res.status(500).send({ error: err });
     }
 
-    const query =
-      "INSERT INTO farm_activity ('user_ID', 'field_name', 'activity', 'date') VALUES (?, ?, ?, ?)";
+    const query = "INSERT INTO farm_activity (`user_ID`, `field_name`, `activity`, `date`) VALUES (?, ?, ?, ?)";
+
 
     connection.query(
       query,
@@ -286,7 +285,7 @@ app.post("/add-activity", (req, res) => {
         if (err1) {
           console.log(err1);
           connection.end();
-          return res.status(500).send({ error: err });
+          return res.status(500).send({ error: err1 });
         }
 
         connection.end();
