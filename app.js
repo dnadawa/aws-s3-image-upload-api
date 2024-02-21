@@ -1,6 +1,14 @@
 const express = require("express");
 const multer = require("multer");
-const AWS = require("aws-sdk");
+
+const {
+  Upload,
+} = require("@aws-sdk/lib-storage");
+
+const {
+  S3,
+} = require("@aws-sdk/client-s3");
+
 const mysql = require("mysql2");
 const databaseConfig = require("./database.config");
 const bodyParse = require("body-parser");
@@ -8,14 +16,18 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const sgMail = require("@sendgrid/mail");
 const otpGenerator = require("otp-generator");
+const { log } = require("console");
 require("dotenv").config();
 
 const app = express();
 app.use(bodyParse.json());
 
-const s3 = new AWS.S3({
-  accessKeyId: process.env.ACCESS_KEY,
-  secretAccessKey: process.env.SECRET_KEY,
+const s3 = new S3({
+  credentials: {
+    accessKeyId: process.env.ACCESS_KEY,
+    secretAccessKey: process.env.SECRET_KEY,
+  },
+  region: process.env.REGION,
 });
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -61,7 +73,7 @@ app.get("/", (req, res) => {
   res.send("<h1>Hello world!</h1>");
 });
 
-app.post("/upload", upload, (req, res) => {
+app.post("/upload", upload, async (req, res) => {
   console.log("starting upload of " + req.file.originalname);
   const params = {
     Bucket: process.env.BUCKET,
@@ -69,15 +81,44 @@ app.post("/upload", upload, (req, res) => {
     Body: req.file.buffer,
   };
 
-  s3.upload(params, (err, data) => {
-    if (err) {
-      return res.status(500).send(err);
-    }
+  try {
+    await new Upload({
+      client: s3,
+      params,
+    }).done();
 
-    return res.status(200).send({
-      status: "Success",
+    console.log("upload of " + req.file.originalname + " complete");
+
+    //insert submission data(uid, fieldname) into database with current timestamp
+    const connection = createMySQLConnection();
+    connection.connect((err) => {
+      if (err) {
+        console.log(err);
+        return res.status(500).send({ error: err });
+      }
+
+      const query =
+        "INSERT INTO submissions (`user_id`, `fieldname`, `submitted_time`) VALUES (?, ?, ?)";
+
+      connection.query(
+        query,
+        [req.body.uid, req.body.fieldname, new Date()],
+        (err1, result, fields) => {
+          if (err1) {
+            console.log(err1);
+            connection.end();
+            return res.status(500).send({ error: err1 });
+          }
+
+          connection.end();
+          return res.status(200).send({ status: "Success" });
+        }
+      );
     });
-  });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send(error);
+  }
 });
 
 app.post("/fields", authenticateToken, (req, res) => {
@@ -322,6 +363,38 @@ app.post("/activities", (req, res) => {
 
 app.get("/validateToken", authenticateToken, (req, res) => {
   res.status(200).send({ status: "success" });
+});
+
+// create a get request to check from the submissions table where same user have submitted a same field within last 24 hours
+app.post("/check-submission", (req, res) => {
+  const { userID, fieldName } = req.body;
+  const connection = createMySQLConnection();
+
+  connection.connect(function (err) {
+    if (err) {
+      console.log(err);
+      return res.status(500).send({ error: err });
+    }
+
+    const query =
+      "SELECT * FROM submissions WHERE user_id = ? AND fieldname = ? AND submitted_time >= NOW() - INTERVAL 1 DAY";
+
+    connection.query(query, [userID, fieldName], (err1, result, fields) => {
+      if (err1) {
+        console.log(err1);
+        connection.end();
+        return res.status(500).send({ error: err });
+      }
+
+      if (result.length === 0) {
+        connection.end();
+        return res.status(200).send({ submitted: false });
+      } else {
+        connection.end();
+        return res.status(200).send({ submitted: true });
+      }
+    });
+  });
 });
 
 app.listen(3000, () => {
